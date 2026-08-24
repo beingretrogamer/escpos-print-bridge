@@ -11,8 +11,8 @@ android {
         applicationId = "com.escposbridge.app"
         minSdk = 24          // Android 7 — covers anything a shop tablet is likely running
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
     }
 
     buildTypes {

@@ -38,6 +38,21 @@ class MainActivity : Activity() {
 
     private val ui = Handler(Looper.getMainLooper())
 
+    /**
+     * Held as a field so it can actually be cancelled.
+     *
+     * Previously tick() re-posted itself every 1.5s with nothing ever stopping
+     * it: the Handler kept the Activity alive after it was closed, a rotation
+     * left a second loop running alongside the first, and the device woke
+     * twice a second forever to refresh a screen nobody was looking at.
+     */
+    private val ticker = object : Runnable {
+        override fun run() {
+            refresh()
+            ui.postDelayed(this, 1500)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -130,7 +145,17 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(root) })
 
         requestNotificationPermissionIfNeeded()
-        tick()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ui.removeCallbacks(ticker)
+        ui.post(ticker)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        ui.removeCallbacks(ticker)
     }
 
     private fun labelledField(parent: LinearLayout, label: String, value: String, inputType: Int): EditText {
@@ -249,7 +274,7 @@ class MainActivity : Activity() {
         (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
     } catch (_: Exception) { false }
 
-    private fun tick() {
+    private fun refresh() {
         status.text = BridgeState.summary()
         status.setTextColor(
             when (BridgeState.status) {
@@ -264,7 +289,6 @@ class MainActivity : Activity() {
             "\n" + battery +
             "\n" + getString(R.string.version_line, appVersion())
         logView.text = BridgeLog.text().ifEmpty { getString(R.string.no_activity) }
-        ui.postDelayed({ tick() }, 1500)
     }
 
     /** Shown so it is obvious which build is on the device. */

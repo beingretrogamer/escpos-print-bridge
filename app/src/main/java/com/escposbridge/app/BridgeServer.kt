@@ -8,7 +8,9 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * HTTP -> TCP print bridge.
@@ -37,6 +39,18 @@ class BridgeServer(
     private val running = AtomicBoolean(false)
     private var serverSocket: ServerSocket? = null
     private val pool = Executors.newCachedThreadPool()
+
+    /**
+     * One print at a time.
+     *
+     * Requests are handled on separate threads, so two overlapping prints — a
+     * double-tapped Charge button, or a receipt and a kitchen ticket landing
+     * together — would each open their own socket to the printer. A typical
+     * ESC/POS printer accepts one connection at a time; the second either
+     * fails or its bytes interleave with the first and both slips come out as
+     * garbage. Serialising here costs nothing at till volumes.
+     */
+    private val printLock = ReentrantLock(true)
 
     fun isRunning() = running.get()
 
@@ -177,6 +191,18 @@ class BridgeServer(
     }
 
     private fun sendToPrinter(ip: String, port: Int, bytes: ByteArray) {
+        // Wait for the printer to be free, but never wedge a request forever.
+        if (!printLock.tryLock(PRINT_QUEUE_WAIT_MS, TimeUnit.MILLISECONDS)) {
+            throw IllegalStateException("printer busy with another job")
+        }
+        try {
+            sendLocked(ip, port, bytes)
+        } finally {
+            printLock.unlock()
+        }
+    }
+
+    private fun sendLocked(ip: String, port: Int, bytes: ByteArray) {
         Socket().use { sock ->
             sock.connect(InetSocketAddress(ip, port), tcpTimeoutMs)
             sock.soTimeout = tcpTimeoutMs
@@ -244,5 +270,9 @@ class BridgeServer(
 
     private fun escape(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
 
-    companion object { const val MAX_BODY = 5 * 1024 * 1024 }
+    companion object {
+        const val MAX_BODY = 5 * 1024 * 1024
+        /** Long enough to queue behind a normal receipt, short enough to fail loudly. */
+        const val PRINT_QUEUE_WAIT_MS = 15_000L
+    }
 }
