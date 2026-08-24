@@ -1,6 +1,7 @@
 package com.escposbridge.app
 
 import android.util.Base64
+import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.InputStream
 import java.net.InetAddress
@@ -45,7 +46,10 @@ class BridgeServer(
     private var serverSocket: ServerSocket? = null
     // Bounded: a cached pool grows a thread per connection, which is fine on
     // loopback and a poor default once this is reachable from the network.
-    private val pool = Executors.newFixedThreadPool(8)
+    // Daemon threads so a leftover pool can never hold the process up.
+    private val pool = Executors.newFixedThreadPool(8) { r ->
+        Thread(r, "bridge-worker").apply { isDaemon = true }
+    }
 
 
     fun isRunning() = running.get()
@@ -88,6 +92,9 @@ class BridgeServer(
         BridgeState.stopped()
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
+        // The service builds a fresh BridgeServer on every start command, so
+        // without this each Save & restart stranded another eight threads.
+        try { pool.shutdownNow() } catch (_: Exception) {}
         onLog("Stopped")
     }
 
@@ -96,7 +103,9 @@ class BridgeServer(
     private fun handle(client: Socket) {
         try {
             client.soTimeout = 10_000
-            val input = client.getInputStream()
+            // Buffered: readLine() pulls a byte at a time, and unbuffered that
+            // is one syscall per byte of every request line and header.
+            val input = BufferedInputStream(client.getInputStream(), 8192)
             val out = BufferedOutputStream(client.getOutputStream())
 
             val requestLine = readLine(input) ?: return

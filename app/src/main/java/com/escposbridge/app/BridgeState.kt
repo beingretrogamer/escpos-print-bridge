@@ -44,8 +44,12 @@ object BridgeState {
         lastPrintAt = System.currentTimeMillis()
     }
 
+    @Volatile var startedAt: Long = 0L
+        private set
+
     fun running(address: String) {
         status = Status.RUNNING; boundTo = address; lastError = null
+        startedAt = System.currentTimeMillis()
     }
 
     fun failed(reason: String) {
@@ -58,7 +62,7 @@ object BridgeState {
 
     /** One line for the notification and the settings screen. */
     fun summary(): String = when (status) {
-        Status.RUNNING -> "Running on ${boundTo ?: "?"}"
+        Status.RUNNING -> "Running on ${boundTo ?: "?"}${uptime()}"
         Status.FAILED  -> "Not running — ${lastError ?: "failed to start"}"
         Status.STOPPED -> "Stopped"
     }
@@ -77,6 +81,18 @@ object BridgeState {
         }
         lastPrint?.let { append("\nLast: ").append(it).append(ago()) }
         updateAvailable?.let { append("\nUpdate available: ").append(it) }
+    }
+
+    /** Surfaces a silent restart, which otherwise looks exactly like uptime. */
+    private fun uptime(): String {
+        if (startedAt == 0L) return ""
+        val mins = (System.currentTimeMillis() - startedAt) / 60000
+        return when {
+            mins < 1    -> ""
+            mins < 60   -> " · up ${mins}m"
+            mins < 1440 -> " · up ${mins / 60}h ${mins % 60}m"
+            else        -> " · up ${mins / 1440}d"
+        }
     }
 
     private fun ago(): String {

@@ -37,7 +37,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Shrinks and obfuscates. The app has no reflection or dynamic
+            // class loading, so the only names that must survive are the
+            // manifest-declared components, kept in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (storeFilePath != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
