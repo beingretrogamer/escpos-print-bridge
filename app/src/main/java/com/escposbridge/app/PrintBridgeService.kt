@@ -56,6 +56,7 @@ class PrintBridgeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        BridgeLog.init(this)
         createChannel()
     }
 

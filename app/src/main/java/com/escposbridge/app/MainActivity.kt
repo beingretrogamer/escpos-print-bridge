@@ -66,6 +66,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        BridgeLog.init(this)
         setContentView(R.layout.activity_main)
 
         statusDot = findViewById(R.id.statusDot)
@@ -111,6 +112,10 @@ class MainActivity : Activity() {
         bridgeUrlView.text = bridgeUrl()
 
         findViewById<Button>(R.id.btnCheckUpdate).setOnClickListener { checkForUpdate() }
+        findViewById<Button>(R.id.btnCopyLog).setOnClickListener {
+            copyToClipboard("bridge log", BridgeLog.text())
+            toast(getString(R.string.toast_log_copied))
+        }
 
         thread {
             val addr = UpdateCheck.localAddress()
@@ -244,14 +249,15 @@ class MainActivity : Activity() {
 
     private fun copyBridgeUrl() {
         val url = bridgeUrl()
-        try {
-            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
-                .setPrimaryClip(ClipData.newPlainText("bridge url", url))
-            toast(getString(R.string.toast_copied, url))
-        } catch (_: Exception) {
-            toast(url)
-        }
+        if (copyToClipboard("bridge url", url)) toast(getString(R.string.toast_copied, url))
+        else toast(url)
     }
+
+    private fun copyToClipboard(label: String, value: String): Boolean = try {
+        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+            .setPrimaryClip(ClipData.newPlainText(label, value))
+        true
+    } catch (_: Exception) { false }
 
     /**
      * Battery optimisation is the one thing that silently kills a long-running
