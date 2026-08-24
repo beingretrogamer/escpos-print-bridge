@@ -2,49 +2,59 @@ package com.escposbridge.app
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.PorterDuff
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.text.InputType
-import android.view.Gravity
-import android.widget.*
+import android.view.View
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import kotlin.concurrent.thread
 
 /**
- * Setup screen: printer address, which port to listen on, start/stop, test print.
+ * Setup and status screen.
  *
- * Built in code rather than XML so the app carries no resource-heavy UI toolkit —
- * the whole point is a small artifact that keeps working on a till nobody updates.
+ * Laid out so the question you actually have — is it working? — is answered by
+ * the top of the screen before you read anything else. Configuration sits
+ * below that, and the warning card only appears when it applies.
  */
 class MainActivity : Activity() {
 
-    private lateinit var ipField: EditText
-    private lateinit var portField: EditText
-    private lateinit var bridgePortField: EditText
-    private lateinit var loopbackSwitch: CheckBox
-    private lateinit var status: TextView
-    private lateinit var detail: TextView
+    private lateinit var statusDot: View
+    private lateinit var statusText: TextView
+    private lateinit var statusDetail: TextView
+    private lateinit var statusCounts: TextView
+    private lateinit var batteryCard: LinearLayout
+    private lateinit var printerIp: EditText
+    private lateinit var printerPort: EditText
+    private lateinit var bridgePort: EditText
+    private lateinit var loopback: CheckBox
+    private lateinit var bridgeUrlView: TextView
     private lateinit var logView: TextView
+    private lateinit var versionText: TextView
 
     private val ui = Handler(Looper.getMainLooper())
 
     /**
-     * Held as a field so it can actually be cancelled.
-     *
-     * Previously tick() re-posted itself every 1.5s with nothing ever stopping
-     * it: the Handler kept the Activity alive after it was closed, a rotation
-     * left a second loop running alongside the first, and the device woke
-     * twice a second forever to refresh a screen nobody was looking at.
+     * Held as a field so it can actually be cancelled — an un-cancelled
+     * self-reposting Runnable keeps the Activity alive after it is closed and
+     * wakes the device to redraw a screen nobody is looking at.
      */
     private val ticker = object : Runnable {
         override fun run() {
@@ -55,94 +65,35 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
+        statusDot = findViewById(R.id.statusDot)
+        statusText = findViewById(R.id.statusText)
+        statusDetail = findViewById(R.id.statusDetail)
+        statusCounts = findViewById(R.id.statusCounts)
+        batteryCard = findViewById(R.id.batteryCard)
+        printerIp = findViewById(R.id.printerIp)
+        printerPort = findViewById(R.id.printerPort)
+        bridgePort = findViewById(R.id.bridgePort)
+        loopback = findViewById(R.id.loopback)
+        bridgeUrlView = findViewById(R.id.bridgeUrl)
+        logView = findViewById(R.id.logView)
+        versionText = findViewById(R.id.versionText)
 
-        root.addView(TextView(this).apply {
-            text = getString(R.string.app_name)
-            textSize = 22f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
-        root.addView(TextView(this).apply {
-            text = getString(R.string.subtitle)
-            textSize = 13f
-            setPadding(0, pad / 3, 0, pad)
-        })
+        printerIp.setText(Prefs.printerIp(this))
+        printerPort.setText(Prefs.printerPort(this).toString())
+        bridgePort.setText(Prefs.bridgePort(this).toString())
+        loopback.isChecked = Prefs.loopbackOnly(this)
+        loopback.setOnCheckedChangeListener { _, _ -> bridgeUrlView.text = bridgeUrl() }
 
-        ipField = labelledField(root, getString(R.string.label_printer_ip), Prefs.printerIp(this), InputType.TYPE_CLASS_TEXT)
-        portField = labelledField(root, getString(R.string.label_printer_port), Prefs.printerPort(this).toString(), InputType.TYPE_CLASS_NUMBER)
-        bridgePortField = labelledField(root, getString(R.string.label_bridge_port), Prefs.bridgePort(this).toString(), InputType.TYPE_CLASS_NUMBER)
+        findViewById<Button>(R.id.btnStart).setOnClickListener { saveAndStart() }
+        findViewById<Button>(R.id.btnStop).setOnClickListener { stopBridge() }
+        findViewById<Button>(R.id.btnTest).setOnClickListener { testPrint() }
+        findViewById<Button>(R.id.btnCopy).setOnClickListener { copyBridgeUrl() }
+        findViewById<Button>(R.id.btnBattery).setOnClickListener { openBatterySettings() }
 
-        loopbackSwitch = CheckBox(this).apply {
-            text = getString(R.string.label_loopback)
-            isChecked = Prefs.loopbackOnly(this@MainActivity)
-        }
-        root.addView(loopbackSwitch)
-        root.addView(TextView(this).apply {
-            text = getString(R.string.hint_loopback)
-            textSize = 12f
-            setPadding(0, 0, 0, pad)
-        })
-
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(Button(this).apply {
-            text = getString(R.string.btn_start)
-            setOnClickListener { saveAndStart() }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        row.addView(Button(this).apply {
-            text = getString(R.string.btn_stop)
-            setOnClickListener { stopBridge() }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        root.addView(row)
-
-        root.addView(Button(this).apply {
-            text = getString(R.string.btn_test)
-            setOnClickListener { testPrint() }
-        })
-
-        root.addView(Button(this).apply {
-            text = getString(R.string.btn_battery)
-            setOnClickListener { openBatterySettings() }
-        })
-
-        status = TextView(this).apply {
-            setPadding(0, pad, 0, pad / 4)
-            textSize = 15f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            gravity = Gravity.START
-        }
-        root.addView(status)
-
-        detail = TextView(this).apply {
-            textSize = 13f
-            setPadding(0, 0, 0, pad / 2)
-        }
-        root.addView(detail)
-
-        root.addView(Button(this).apply {
-            text = getString(R.string.btn_copy_url)
-            setOnClickListener { copyBridgeUrl() }
-        })
-
-        root.addView(TextView(this).apply {
-            text = getString(R.string.label_activity)
-            textSize = 12f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
-        logView = TextView(this).apply {
-            textSize = 11f
-            setTextColor(Color.DKGRAY)
-            setPadding(0, pad / 3, 0, 0)
-        }
-        root.addView(logView)
-
-        setContentView(ScrollView(this).apply { addView(root) })
+        versionText.text = getString(R.string.version_line, appVersion())
+        bridgeUrlView.text = bridgeUrl()
 
         requestNotificationPermissionIfNeeded()
     }
@@ -158,20 +109,6 @@ class MainActivity : Activity() {
         ui.removeCallbacks(ticker)
     }
 
-    private fun labelledField(parent: LinearLayout, label: String, value: String, inputType: Int): EditText {
-        parent.addView(TextView(this).apply {
-            text = label
-            textSize = 12f
-        })
-        val field = EditText(this).apply {
-            setText(value)
-            this.inputType = inputType
-            setSingleLine()
-        }
-        parent.addView(field)
-        return field
-    }
-
     /** Android 13+ will not show the foreground-service notification without this. */
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
@@ -179,21 +116,23 @@ class MainActivity : Activity() {
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
-    private fun readSettings(): Triple<String, Int, Int> {
-        val ip = ipField.text.toString().trim().ifEmpty { Prefs.DEF_PRINTER_IP }
-        val port = portField.text.toString().trim().toIntOrNull() ?: Prefs.DEF_PRINTER_PORT
-        val bridgePort = bridgePortField.text.toString().trim().toIntOrNull() ?: Prefs.DEF_BRIDGE_PORT
-        return Triple(ip, port, bridgePort)
-    }
+    // ── Actions ───────────────────────────────────────────────────────
+
+    private fun readSettings(): Triple<String, Int, Int> = Triple(
+        printerIp.text.toString().trim().ifEmpty { Prefs.DEF_PRINTER_IP },
+        printerPort.text.toString().trim().toIntOrNull() ?: Prefs.DEF_PRINTER_PORT,
+        bridgePort.text.toString().trim().toIntOrNull() ?: Prefs.DEF_BRIDGE_PORT,
+    )
 
     private fun saveAndStart() {
-        val (ip, port, bridgePort) = readSettings()
-        Prefs.save(this, ip, port, bridgePort, loopbackSwitch.isChecked)
+        val (ip, port, bport) = readSettings()
+        Prefs.save(this, ip, port, bport, loopback.isChecked)
+        bridgeUrlView.text = bridgeUrl()
         // Restart so a changed port or bind scope actually takes effect.
         stopService(Intent(this, PrintBridgeService::class.java))
         val svc = Intent(this, PrintBridgeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc) else startService(svc)
-        toast(getString(R.string.toast_started, bridgePort))
+        toast(getString(R.string.toast_started, bport))
     }
 
     private fun stopBridge() {
@@ -201,8 +140,10 @@ class MainActivity : Activity() {
         toast(getString(R.string.toast_stopped))
     }
 
-    /** Talks straight to the printer, skipping the HTTP hop, so a failure here
-        means the printer/network — not the bridge. */
+    /**
+     * Talks straight to the printer, skipping the HTTP hop, so a failure here
+     * means the printer or the network rather than the bridge.
+     */
     private fun testPrint() {
         val (ip, port, _) = readSettings()
         thread {
@@ -210,8 +151,7 @@ class MainActivity : Activity() {
                 Socket().use { s ->
                     s.connect(InetSocketAddress(ip, port), 5000)
                     val o: OutputStream = s.getOutputStream()
-                    o.write(testSlip())
-                    o.flush()
+                    o.write(testSlip()); o.flush()
                     Thread.sleep(150)
                 }
                 getString(R.string.test_ok, ip, port)
@@ -226,75 +166,91 @@ class MainActivity : Activity() {
     private fun testSlip(): ByteArray {
         val esc = 0x1b.toByte()
         val out = ArrayList<Byte>()
-        out.addAll(listOf(esc, 0x40))                      // init
-        out.addAll(listOf(esc, 0x61, 0x01))                // centre
+        out.addAll(listOf(esc, 0x40))
+        out.addAll(listOf(esc, 0x61, 0x01))
         out.addAll("PRINT BRIDGE TEST\n\n".toByteArray().toList())
-        out.addAll(listOf(esc, 0x61, 0x00))                // left
+        out.addAll(listOf(esc, 0x61, 0x00))
         out.addAll("If you can read this,\nthis device can reach the printer.\n".toByteArray().toList())
         out.addAll("\n\n\n".toByteArray().toList())
-        out.addAll(listOf(0x1d.toByte(), 0x56, 0x42, 0x00)) // partial cut
+        out.addAll(listOf(0x1d.toByte(), 0x56, 0x42, 0x00))
         return out.toByteArray()
     }
 
-    /**
-     * Battery optimisation is the one thing that silently kills a long-running
-     * service, and an app cannot exempt itself — the user has to. Opening the
-     * settings list (rather than prompting directly) needs no extra permission
-     * and stays within Play Store policy.
-     */
-    private fun openBatterySettings() {
-        val tried = listOf(
-            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
-            // Vendor ROMs sometimes lack the list screen; fall back to this app's page.
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                .setData(Uri.fromParts("package", packageName, null)),
-        )
-        for (i in tried) {
-            try { startActivity(i); return } catch (_: Exception) { /* try the next */ }
-        }
-        toast(getString(R.string.battery_no_screen))
+    private fun bridgeUrl(): String {
+        val port = bridgePort.text.toString().trim().toIntOrNull() ?: Prefs.DEF_BRIDGE_PORT
+        return if (loopback.isChecked) "http://localhost:$port"
+        else "http://<this device's IP>:$port"
     }
-
-    private fun bridgeUrl(): String =
-        if (Prefs.loopbackOnly(this)) "http://localhost:${Prefs.bridgePort(this)}"
-        else "http://<this device's IP>:${Prefs.bridgePort(this)}"
 
     private fun copyBridgeUrl() {
         val url = bridgeUrl()
         try {
-            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("bridge url", url))
+            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                .setPrimaryClip(ClipData.newPlainText("bridge url", url))
             toast(getString(R.string.toast_copied, url))
         } catch (_: Exception) {
             toast(url)
         }
     }
 
+    /**
+     * Battery optimisation is the one thing that silently kills a long-running
+     * service, and an app cannot exempt itself. Opening the settings list
+     * rather than prompting directly needs no extra permission and stays
+     * inside Play Store policy.
+     */
+    private fun openBatterySettings() {
+        val candidates = listOf(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.fromParts("package", packageName, null)),
+        )
+        for (i in candidates) {
+            try { startActivity(i); return } catch (_: Exception) { /* try the next */ }
+        }
+        toast(getString(R.string.battery_no_screen))
+    }
+
     private fun isBatteryExempt(): Boolean = try {
         (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
     } catch (_: Exception) { false }
 
-    private fun refresh() {
-        status.text = BridgeState.summary()
-        status.setTextColor(
-            when (BridgeState.status) {
-                BridgeState.Status.RUNNING -> Color.rgb(0, 128, 0)
-                BridgeState.Status.FAILED  -> Color.rgb(180, 0, 0)
-                BridgeState.Status.STOPPED -> Color.DKGRAY
-            }
-        )
-        val battery = if (isBatteryExempt()) getString(R.string.battery_ok) else getString(R.string.battery_warn)
-        detail.text = getString(R.string.status_line, Prefs.printerIp(this), Prefs.printerPort(this), Prefs.bridgePort(this)) +
-            "\n" + bridgeUrl() +
-            "\n" + battery +
-            "\n" + getString(R.string.version_line, appVersion())
-        logView.text = BridgeLog.text().ifEmpty { getString(R.string.no_activity) }
-    }
-
-    /** Shown so it is obvious which build is on the device. */
     private fun appVersion(): String = try {
         packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
     } catch (_: Exception) { "?" }
+
+    // ── Refresh ───────────────────────────────────────────────────────
+
+    private fun refresh() {
+        val colour = when (BridgeState.status) {
+            BridgeState.Status.RUNNING -> getColor(R.color.ok)
+            BridgeState.Status.FAILED  -> getColor(R.color.danger)
+            BridgeState.Status.STOPPED -> getColor(R.color.ink_faint)
+        }
+        statusText.text = when (BridgeState.status) {
+            BridgeState.Status.RUNNING -> getString(R.string.state_running)
+            BridgeState.Status.FAILED  -> getString(R.string.state_failed)
+            BridgeState.Status.STOPPED -> getString(R.string.state_stopped)
+        }
+        statusText.setTextColor(if (BridgeState.status == BridgeState.Status.FAILED) colour else getColor(R.color.ink))
+        statusDot.background?.setColorFilter(colour, PorterDuff.Mode.SRC_IN)
+
+        statusDetail.text = when (BridgeState.status) {
+            BridgeState.Status.RUNNING ->
+                getString(R.string.detail_running, BridgeState.boundTo ?: "?", BridgeState.printerTarget ?: "-")
+            BridgeState.Status.FAILED ->
+                BridgeState.lastError ?: getString(R.string.state_failed)
+            BridgeState.Status.STOPPED -> getString(R.string.detail_stopped)
+        }
+
+        statusCounts.visibility = if (BridgeState.okCount > 0 || BridgeState.failCount > 0) View.VISIBLE else View.GONE
+        statusCounts.text = getString(R.string.counts, BridgeState.okCount, BridgeState.failCount) +
+            (BridgeState.lastPrint?.let { "  ·  $it" } ?: "")
+
+        batteryCard.visibility = if (isBatteryExempt()) View.GONE else View.VISIBLE
+
+        logView.text = BridgeLog.text().ifEmpty { getString(R.string.no_activity) }
+    }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 }

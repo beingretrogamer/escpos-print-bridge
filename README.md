@@ -108,12 +108,41 @@ Requirements if you build it yourself: JDK 17, Android SDK 34, Gradle 8.7.
 | `Prefs.kt` | The handful of settings that ever change. |
 | `BridgeLog.kt` | Rolling in-app activity log. |
 
-## Publishing to Play Store
+## Publishing
 
-Not there yet. It would still need a release keystore (CI builds debug-signed),
-a real launcher icon (it currently borrows a framework drawable), a privacy
-policy, and a data-safety declaration — short, since the app collects nothing
-and talks only to the printer you point it at.
+### Release signing
+
+The build signs a release APK as soon as four repository secrets exist, and
+falls back to a debug build until then. Nothing about the keystore lives in
+the repo.
+
+```bash
+keytool -genkeypair -v -keystore release.jks -keyalg RSA -keysize 2048 \
+        -validity 10000 -alias escposbridge
+base64 -i release.jks | pbcopy      # macOS; base64 -w0 on Linux
+```
+
+Then add, under Settings › Secrets and variables › Actions:
+
+| Secret | Value |
+| --- | --- |
+| `KEYSTORE_BASE64` | the base64 above |
+| `KEYSTORE_PASSWORD` | keystore password |
+| `KEY_ALIAS` | `escposbridge` |
+| `KEY_PASSWORD` | key password |
+
+**Keep `release.jks` and its passwords backed up somewhere you will still have
+in five years.** Lose them and Play Store will never accept an update to this
+app again — the only route is a new listing under a new package name.
+
+### Still needed for the Play Store
+
+- A privacy policy URL. Short: the app collects nothing, stores four settings
+  on the device, and talks only to the printer address you enter.
+- The data-safety form — "no data collected".
+- Screenshots and a feature graphic.
+- Play targets a recent API each year; raising `targetSdk` is the one change
+  likely to need code, since foreground-service rules keep tightening.
 
 ## Licence
 

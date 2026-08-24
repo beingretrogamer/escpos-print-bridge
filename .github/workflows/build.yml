@@ -34,14 +34,38 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      # A release build only happens once a keystore secret exists; until then
+      # the debug APK is what gets published, which is fine for sideloading.
+      - name: Decode keystore
+        id: keystore
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
+
+      - name: Build APK
+        env:
+          KEYSTORE_FILE: ${{ steps.keystore.outputs.path }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_FILE" ]; then
+            gradle assembleRelease --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace
+          fi
 
       # One fixed filename so the "latest release" download URL never changes.
       - name: Stage APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/escpos-print-bridge.apk
+          SRC=app/build/outputs/apk/release/app-release.apk
+          [ -f "$SRC" ] || SRC=app/build/outputs/apk/debug/app-debug.apk
+          echo "packaging $SRC"
+          cp "$SRC" out/escpos-print-bridge.apk
           sha256sum out/escpos-print-bridge.apk | tee out/escpos-print-bridge.apk.sha256
           ls -lh out/
 

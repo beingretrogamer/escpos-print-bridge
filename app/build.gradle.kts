@@ -11,13 +11,34 @@ android {
         applicationId = "com.escposbridge.app"
         minSdk = 24          // Android 7 — covers anything a shop tablet is likely running
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.3.0"
+        versionCode = 6
+        versionName = "1.4.0"
+    }
+
+    /*
+     * Release signing is driven by environment variables so the keystore never
+     * enters the repo. CI supplies them from secrets; locally they are simply
+     * absent and the release build stays unsigned, which is a clearer failure
+     * than silently shipping a debug-signed artifact as a release.
+     */
+    val storeFilePath = System.getenv("KEYSTORE_FILE")
+    signingConfigs {
+        if (storeFilePath != null) {
+            create("release") {
+                storeFile = file(storeFilePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (storeFilePath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {

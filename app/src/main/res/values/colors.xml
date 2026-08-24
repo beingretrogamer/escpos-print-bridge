@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#1B2A38</color>
+
+    <color name="bg">#F2F4F7</color>
+    <color name="card">#FFFFFF</color>
+    <color name="ink">#111927</color>
+    <color name="ink_soft">#5B6673</color>
+    <color name="ink_faint">#98A2B3</color>
+    <color name="line">#E4E7EC</color>
+
+    <color name="accent">#1B6FE0</color>
+    <color name="accent_pressed">#1558B0</color>
+    <color name="ok">#0E9F6E</color>
+    <color name="warn">#B54708</color>
+    <color name="warn_bg">#FFF6ED</color>
+    <color name="danger">#D92D20</color>
 </resources>
