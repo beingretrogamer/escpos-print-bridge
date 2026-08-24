@@ -22,9 +22,6 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import java.io.OutputStream
-import java.net.InetSocketAddress
-import java.net.Socket
 import kotlin.concurrent.thread
 
 /**
@@ -209,12 +206,10 @@ class MainActivity : Activity() {
         val (ip, port, _) = readSettings()
         thread {
             val result = try {
-                Socket().use { s ->
-                    s.connect(InetSocketAddress(ip, port), 5000)
-                    val o: OutputStream = s.getOutputStream()
-                    o.write(testSlip()); o.flush()
-                    Thread.sleep(150)
-                }
+                // Through the shared queue: a test slip fired while a receipt
+                // is printing would otherwise open a second connection and
+                // both would come out garbled.
+                PrinterQueue.send(ip, port, testSlip(), onLog = { BridgeLog.append(it) })
                 getString(R.string.test_ok, ip, port)
             } catch (e: Exception) {
                 getString(R.string.test_fail, ip, port, e.message ?: "unknown error")
