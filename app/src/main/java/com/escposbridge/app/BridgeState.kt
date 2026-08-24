@@ -19,6 +19,28 @@ object BridgeState {
     @Volatile var lastError: String? = null
         private set
 
+    /** Where prints are being sent, for the notification to show. */
+    @Volatile var printerTarget: String? = null
+    @Volatile var okCount: Int = 0
+        private set
+    @Volatile var failCount: Int = 0
+        private set
+    @Volatile var lastPrint: String? = null
+        private set
+    @Volatile private var lastPrintAt: Long = 0L
+
+    @Synchronized fun printOk(bytes: Int, target: String) {
+        okCount++; printerTarget = target
+        lastPrint = "$bytes bytes to $target"
+        lastPrintAt = System.currentTimeMillis()
+    }
+
+    @Synchronized fun printFailed(reason: String) {
+        failCount++
+        lastPrint = "failed — $reason"
+        lastPrintAt = System.currentTimeMillis()
+    }
+
     fun running(address: String) {
         status = Status.RUNNING; boundTo = address; lastError = null
     }
@@ -36,5 +58,30 @@ object BridgeState {
         Status.RUNNING -> "Running on ${boundTo ?: "?"}"
         Status.FAILED  -> "Not running — ${lastError ?: "failed to start"}"
         Status.STOPPED -> "Stopped"
+    }
+
+    /**
+     * The expanded notification body — everything needed to tell, without
+     * unlocking the tablet or opening the app, whether the bridge is up, where
+     * it is sending, and whether the last receipt actually came out.
+     */
+    fun details(): String = buildString {
+        append(summary())
+        printerTarget?.let { append("\nPrinter: ").append(it) }
+        if (okCount > 0 || failCount > 0) {
+            append("\nPrints: ").append(okCount).append(" ok")
+            if (failCount > 0) append(", ").append(failCount).append(" failed")
+        }
+        lastPrint?.let { append("\nLast: ").append(it).append(ago()) }
+    }
+
+    private fun ago(): String {
+        if (lastPrintAt == 0L) return ""
+        val secs = (System.currentTimeMillis() - lastPrintAt) / 1000
+        return when {
+            secs < 60   -> " ($secs s ago)"
+            secs < 3600 -> " (${secs / 60} min ago)"
+            else        -> " (${secs / 3600} h ago)"
+        }
     }
 }

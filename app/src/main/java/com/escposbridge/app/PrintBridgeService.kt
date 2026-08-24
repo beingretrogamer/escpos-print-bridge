@@ -63,7 +63,7 @@ class PrintBridgeService : Service() {
                 printerPort = Prefs.printerPort(this),
                 bridgePort = Prefs.bridgePort(this),
                 loopbackOnly = Prefs.loopbackOnly(this),
-                onLog = { line -> BridgeLog.append(line); updateNotification(line) },
+                onLog = { line -> BridgeLog.append(line); updateNotification(BridgeState.summary()) },
                 power = powerGate,
             )
             s.start()
@@ -146,8 +146,13 @@ class PrintBridgeService : Service() {
         return builder
             .setContentTitle(getString(if (failed) R.string.notif_title_failed else R.string.notif_title))
             .setContentText(text)
+            // Pull the notification down and the whole picture is there —
+            // listening address, printer, counts, and how the last receipt
+            // went — without unlocking the tablet or opening the app.
+            .setStyle(Notification.BigTextStyle().bigText(BridgeState.details()))
             .setSmallIcon(if (failed) android.R.drawable.stat_notify_error else android.R.drawable.stat_notify_sync)
             .setOngoing(true)
+            .setShowWhen(false)
             .setContentIntent(open)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.btn_stop), stop)
             .build()

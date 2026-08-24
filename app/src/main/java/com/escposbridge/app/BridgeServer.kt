@@ -76,6 +76,7 @@ class BridgeServer(
                 serverSocket = socket
                 val address = "${if (loopbackOnly) "127.0.0.1" else "0.0.0.0"}:$bridgePort"
                 BridgeState.running(address)
+                BridgeState.printerTarget = "$printerIp:$printerPort"
                 onLog("Listening on $address -> $printerIp:$printerPort")
 
                 while (running.get()) {
@@ -178,10 +179,12 @@ class BridgeServer(
 
                     try {
                         sendToPrinter(targetIp, targetPort, bytes)
+                        BridgeState.printOk(bytes.size, "$targetIp:$targetPort")
                         onLog("Printed ${bytes.size} bytes -> $targetIp:$targetPort")
                         respond(out, 200, "application/json",
                             """{"ok":true,"bytesSent":${bytes.size},"printer":"$targetIp:$targetPort"}""".toByteArray())
                     } catch (e: Exception) {
+                        BridgeState.printFailed(e.message ?: e.javaClass.simpleName)
                         onLog("Print failed: ${e.message}")
                         respond(out, 502, "application/json",
                             """{"ok":false,"error":"${escape(e.message ?: "printer error")}"}""".toByteArray())
