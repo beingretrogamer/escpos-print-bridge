@@ -15,4 +15,6 @@
     <color name="warn">#B54708</color>
     <color name="warn_bg">#FFF6ED</color>
     <color name="danger">#D92D20</color>
+    <color name="field_fill">#F9FAFB</color>
+    <color name="warn_line">#FDDCAB</color>
 </resources>

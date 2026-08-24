@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 10" landscape, which is what this actually runs on. -->
+    <dimen name="side_padding">180dp</dimen>
+</resources>

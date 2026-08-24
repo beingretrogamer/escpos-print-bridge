@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- No action bar: the page carries its own title, and a stock light bar
+         above a dark-mode page looks like a bug. -->
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+
     <!-- Small uppercase heading that separates a card into a named section. -->
     <style name="SectionLabel">
         <item name="android:layout_width">match_parent</item>

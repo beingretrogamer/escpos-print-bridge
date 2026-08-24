@@ -9,7 +9,19 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="@dimen/side_padding"
+        android:paddingEnd="@dimen/side_padding"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:text="@string/app_name"
+            android:textColor="@color/ink"
+            android:textSize="22sp"
+            android:textStyle="bold" />
 
         <!-- ── Status ─────────────────────────────────────────── -->
         <LinearLayout
@@ -144,7 +156,7 @@
                 style="@style/Field"
                 android:hint="192.168.1.200"
                 android:inputType="text"
-                android:autofillHints="" />
+                android:importantForAutofill="no" />
 
             <TextView style="@style/FieldLabel" android:text="@string/label_printer_port" />
 
@@ -153,7 +165,7 @@
                 style="@style/Field"
                 android:hint="9100"
                 android:inputType="number"
-                android:autofillHints="" />
+                android:importantForAutofill="no" />
 
             <Button
                 android:id="@+id/btnTest"
@@ -193,7 +205,7 @@
                 style="@style/Field"
                 android:hint="8080"
                 android:inputType="number"
-                android:autofillHints="" />
+                android:importantForAutofill="no" />
 
             <CheckBox
                 android:id="@+id/loopback"
