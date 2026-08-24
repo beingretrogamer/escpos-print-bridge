@@ -19,6 +19,9 @@ object BridgeState {
     @Volatile var lastError: String? = null
         private set
 
+    /** Set when GitHub reports a release newer than the installed build. */
+    @Volatile var updateAvailable: String? = null
+
     /** Where prints are being sent, for the notification to show. */
     @Volatile var printerTarget: String? = null
     @Volatile var okCount: Int = 0
@@ -73,6 +76,7 @@ object BridgeState {
             if (failCount > 0) append(", ").append(failCount).append(" failed")
         }
         lastPrint?.let { append("\nLast: ").append(it).append(ago()) }
+        updateAvailable?.let { append("\nUpdate available: ").append(it) }
     }
 
     private fun ago(): String {

@@ -89,6 +89,8 @@ class PrintBridgeService : Service() {
             android.os.Handler(mainLooper).postDelayed({ updateNotification(BridgeState.summary()) }, 400)
         }
 
+        checkForUpdate()
+
         // In LAN mode the request arrives from another device, so the radio has
         // to stay reachable even when this one is idle. In loopback mode the
         // locks are taken per print instead.
@@ -111,6 +113,32 @@ class PrintBridgeService : Service() {
         } catch (_: Exception) {}
         try { getSystemService(NotificationManager::class.java).cancel(NOTIF_ID) } catch (_: Exception) {}
         super.onDestroy()
+    }
+
+    /**
+     * Asks GitHub once a day whether there is a newer release.
+     *
+     * Result goes into the ongoing notification rather than a new one: this
+     * thing is meant to sit quietly in the shade, and an app that invents its
+     * own alert to tell you about itself is the kind you end up silencing.
+     */
+    private fun checkForUpdate() {
+        val now = System.currentTimeMillis()
+        if (now - lastUpdateCheck < UPDATE_CHECK_INTERVAL_MS) return
+        lastUpdateCheck = now
+        Thread {
+            val current = try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: return@Thread
+            } catch (_: Exception) { return@Thread }
+            val r = UpdateCheck.fetch(current) ?: return@Thread
+            if (r.newer) {
+                BridgeState.updateAvailable = r.latest
+                BridgeLog.append("Update available: ${r.latest}")
+                android.os.Handler(mainLooper).post { updateNotification(BridgeState.summary()) }
+            } else {
+                BridgeState.updateAvailable = null
+            }
+        }.start()
     }
 
     @Synchronized
@@ -196,5 +224,7 @@ class PrintBridgeService : Service() {
         const val ACTION_STOP = "com.escposbridge.app.STOP"
         /** Backstop so a hung print cannot hold the CPU awake indefinitely. */
         const val LOCK_TIMEOUT_MS = 2 * 60 * 1000L
+        const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
+        @Volatile private var lastUpdateCheck = 0L
     }
 }

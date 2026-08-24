@@ -41,6 +41,8 @@ class MainActivity : Activity() {
     private lateinit var statusDetail: TextView
     private lateinit var statusCounts: TextView
     private lateinit var batteryCard: LinearLayout
+    private lateinit var updateCard: LinearLayout
+    private lateinit var updateText: TextView
     private lateinit var printerIp: EditText
     private lateinit var printerPort: EditText
     private lateinit var bridgePort: EditText
@@ -74,6 +76,8 @@ class MainActivity : Activity() {
         statusDetail = findViewById(R.id.statusDetail)
         statusCounts = findViewById(R.id.statusCounts)
         batteryCard = findViewById(R.id.batteryCard)
+        updateCard = findViewById(R.id.updateCard)
+        updateText = findViewById(R.id.updateText)
         printerIp = findViewById(R.id.printerIp)
         printerPort = findViewById(R.id.printerPort)
         bridgePort = findViewById(R.id.bridgePort)
@@ -95,6 +99,16 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnTest).setOnClickListener { testPrint() }
         findViewById<Button>(R.id.btnCopy).setOnClickListener { copyBridgeUrl() }
         findViewById<Button>(R.id.btnBattery).setOnClickListener { openBatterySettings() }
+        findViewById<Button>(R.id.btnUpdate).setOnClickListener {
+            // Hand the download to the browser. Installing from inside the app
+            // would need REQUEST_INSTALL_PACKAGES, which Google restricts to
+            // apps whose whole purpose is installing software.
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateCheck.LATEST_PAGE)))
+            } catch (_: Exception) {
+                toast(UpdateCheck.LATEST_PAGE)
+            }
+        }
 
         versionText.text = getString(R.string.version_line, appVersion())
         bridgeUrlView.text = bridgeUrl()
@@ -265,6 +279,10 @@ class MainActivity : Activity() {
         btnStart.text = getString(if (running) R.string.btn_restart else R.string.btn_start)
         btnStop.isEnabled = running
         btnStop.alpha = if (running) 1f else 0.45f
+
+        val update = BridgeState.updateAvailable
+        updateCard.visibility = if (update != null) View.VISIBLE else View.GONE
+        if (update != null) updateText.text = getString(R.string.update_available, update, appVersion())
 
         batteryCard.visibility = if (isBatteryExempt()) View.GONE else View.VISIBLE
 
