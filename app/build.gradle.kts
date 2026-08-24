@@ -11,8 +11,8 @@ android {
         applicationId = "com.escposbridge.app"
         minSdk = 24          // Android 7 — covers anything a shop tablet is likely running
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.4.0"
+        versionCode = 7
+        versionName = "1.4.1"
     }
 
     /*
@@ -21,7 +21,9 @@ android {
      * absent and the release build stays unsigned, which is a clearer failure
      * than silently shipping a debug-signed artifact as a release.
      */
-    val storeFilePath = System.getenv("KEYSTORE_FILE")
+    // Empty, not absent: the workflow always sets KEYSTORE_FILE, and it is ""
+    // when there is no keystore secret. file("") throws, so treat blank as unset.
+    val storeFilePath = System.getenv("KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
     signingConfigs {
         if (storeFilePath != null) {
             create("release") {
