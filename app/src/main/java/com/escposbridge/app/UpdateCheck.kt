@@ -1,6 +1,8 @@
 package com.escposbridge.app
 
 import java.net.HttpURLConnection
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.net.URL
 
 /**
@@ -51,6 +53,25 @@ object UpdateCheck {
             if (x != y) return x > y
         }
         return false
+    }
+
+    /**
+     * This device's address on the local network.
+     *
+     * The screen used to print the literal text "<this device's IP>", so the
+     * Copy button handed over a URL that could not work — precisely when it
+     * matters, which is after unticking "this device only" so another machine
+     * can print through this one.
+     */
+    fun localAddress(): String? = try {
+        NetworkInterface.getNetworkInterfaces().asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.asSequence() }
+            .filterIsInstance<Inet4Address>()
+            .firstOrNull { it.isSiteLocalAddress }
+            ?.hostAddress
+    } catch (_: Exception) {
+        null
     }
 
     private fun parts(v: String): List<Int> =

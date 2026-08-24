@@ -113,7 +113,36 @@ class MainActivity : Activity() {
         versionText.text = getString(R.string.version_line, appVersion())
         bridgeUrlView.text = bridgeUrl()
 
+        findViewById<Button>(R.id.btnCheckUpdate).setOnClickListener { checkForUpdate() }
+
+        thread {
+            val addr = UpdateCheck.localAddress()
+            ui.post { lanAddress = addr; bridgeUrlView.text = bridgeUrl() }
+        }
+
         requestNotificationPermissionIfNeeded()
+    }
+
+    /**
+     * On-demand update check.
+     *
+     * The service checks once a day, which is right for something that should
+     * stay quiet — but it means a newly published version could take 24 hours
+     * to surface, with no way to ask.
+     */
+    private fun checkForUpdate() {
+        toast(getString(R.string.checking))
+        thread {
+            val current = appVersion()
+            val r = UpdateCheck.fetch(current)
+            ui.post {
+                when {
+                    r == null -> toast(getString(R.string.check_failed))
+                    r.newer -> { BridgeState.updateAvailable = r.latest; refresh() }
+                    else -> { BridgeState.updateAvailable = null; refresh(); toast(getString(R.string.check_uptodate, current)) }
+                }
+            }
+        }
     }
 
     override fun onResume() {
@@ -144,6 +173,8 @@ class MainActivity : Activity() {
 
     private fun saveAndStart() {
         val (ip, port, bport) = readSettings()
+        if (!looksLikeHost(ip)) { toast(getString(R.string.bad_ip)); return }
+        if (port !in 1..65535 || bport !in 1..65535) { toast(getString(R.string.bad_port)); return }
         Prefs.save(this, ip, port, bport, loopback.isChecked)
         bridgeUrlView.text = bridgeUrl()
         // No stopService() first: that is asynchronous, and the resulting
@@ -156,6 +187,10 @@ class MainActivity : Activity() {
         toast(getString(R.string.toast_started, bport))
         ui.postDelayed({ refresh() }, 400)
     }
+
+    /** Permissive on purpose — hostnames are legitimate, gibberish is not. */
+    private fun looksLikeHost(s: String): Boolean =
+        s.isNotBlank() && s.length <= 253 && Regex("^[A-Za-z0-9.\\-]+$").matches(s)
 
     private fun stopBridge() {
         // Remember the choice: a reboot should not silently undo a deliberate stop.
@@ -202,10 +237,14 @@ class MainActivity : Activity() {
         return out.toByteArray()
     }
 
+    /** Cached so the screen is not enumerating interfaces every 1.5s. */
+    private var lanAddress: String? = null
+
     private fun bridgeUrl(): String {
         val port = bridgePort.text.toString().trim().toIntOrNull() ?: Prefs.DEF_BRIDGE_PORT
-        return if (loopback.isChecked) "http://localhost:$port"
-        else "http://<this device's IP>:$port"
+        if (loopback.isChecked) return "http://localhost:$port"
+        val host = lanAddress ?: return getString(R.string.url_unknown_host, port)
+        return "http://$host:$port"
     }
 
     private fun copyBridgeUrl() {

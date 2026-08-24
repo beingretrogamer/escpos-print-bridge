@@ -36,6 +36,13 @@
     <string name="test_ok">Test slip sent to %1$s:%2$d</string>
     <string name="test_fail">Could not reach %1$s:%2$d — %3$s</string>
     <string name="version_line">Version %1$s</string>
+    <string name="btn_check_update">Check for updates</string>
+    <string name="checking">Checking…</string>
+    <string name="check_failed">Could not reach GitHub to check.</string>
+    <string name="check_uptodate">You are on the latest version (%1$s).</string>
+    <string name="url_unknown_host">http://&lt;this device\'s IP&gt;:%1$d</string>
+    <string name="bad_ip">Enter a valid printer address, e.g. 192.168.1.200</string>
+    <string name="bad_port">Ports must be between 1 and 65535.</string>
 
     <string name="battery_warn">Battery optimisation is on for this app. Android may stop the bridge while you are trading.</string>
     <string name="battery_no_screen">Could not open battery settings on this device — find it under Settings › Apps.</string>
