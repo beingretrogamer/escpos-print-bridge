@@ -1,0 +1,67 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    # A tag is what produces a downloadable release:
+    #   git tag v1.0.0 && git push origin v1.0.0
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Pinned rather than relying on whatever Gradle the runner image ships:
+      # AGP 8.5.2 requires Gradle 8.7+, and an image bump could silently break
+      # this months from now.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      # One fixed filename so the "latest release" download URL never changes.
+      - name: Stage APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/escpos-print-bridge.apk
+          sha256sum out/escpos-print-bridge.apk | tee out/escpos-print-bridge.apk.sha256
+          ls -lh out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: escpos-print-bridge-apk
+          path: out/*
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            out/escpos-print-bridge.apk \
+            out/escpos-print-bridge.apk.sha256 \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "Debug-signed APK. Install on the device that will talk to the printer.
+
+          Direct download (always the newest release):
+          https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/escpos-print-bridge.apk"
