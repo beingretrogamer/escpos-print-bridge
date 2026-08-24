@@ -24,6 +24,16 @@ class PrintBridgeService : Service() {
 
     private var server: BridgeServer? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    /**
+     * Set before teardown so nothing re-posts the notification on the way out.
+     *
+     * Stopping ran server.stop(), which logs "Stopped", which called back into
+     * updateNotification() — posting a fresh ongoing notification just as the
+     * service was being destroyed. The system removed the foreground one it
+     * knew about, and that new copy stayed in the shade: undismissable, with a
+     * Stop button for a service that no longer existed.
+     */
+    @Volatile private var shuttingDown = false
     private var wifiLock: WifiManager.WifiLock? = null
 
     /**
@@ -51,13 +61,19 @@ class PrintBridgeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            shuttingDown = true
             stopSelf()
             return START_NOT_STICKY
         }
+        shuttingDown = false
 
         startForeground(NOTIF_ID, buildNotification(getString(R.string.notif_starting)))
 
-        if (server?.isRunning() != true) {
+        // Always rebuild rather than only starting when idle: this is also the
+        // path a settings change takes, and a server left running would keep
+        // the old port and printer.
+        server?.stop()
+        run {
             val s = BridgeServer(
                 printerIp = Prefs.printerIp(this),
                 printerPort = Prefs.printerPort(this),
@@ -83,9 +99,17 @@ class PrintBridgeService : Service() {
     }
 
     override fun onDestroy() {
+        shuttingDown = true
         server?.stop()
         server = null
         releaseLocks(force = true)
+        // Take the notification down explicitly. Relying on the service dying
+        // to remove it is what let a re-posted copy outlive the service.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
+            else @Suppress("DEPRECATION") stopForeground(true)
+        } catch (_: Exception) {}
+        try { getSystemService(NotificationManager::class.java).cancel(NOTIF_ID) } catch (_: Exception) {}
         super.onDestroy()
     }
 
@@ -159,6 +183,7 @@ class PrintBridgeService : Service() {
     }
 
     private fun updateNotification(text: String) {
+        if (shuttingDown) return
         try {
             (getSystemService(NotificationManager::class.java))
                 .notify(NOTIF_ID, buildNotification(text))

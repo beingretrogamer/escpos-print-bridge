@@ -15,7 +15,18 @@ object Prefs {
     fun bridgePort(c: Context): Int = p(c).getInt("bridgePort", DEF_BRIDGE_PORT)
     /** Loopback by default: the browser using this bridge is on this device. */
     fun loopbackOnly(c: Context): Boolean = p(c).getBoolean("loopbackOnly", true)
+    /**
+     * Whether the bridge should come back on its own after a reboot.
+     *
+     * Tracks the last deliberate choice: pressing Stop meant stop, and a
+     * restart should not quietly undo that. Defaults to true so a tablet that
+     * has never been touched still comes up printing.
+     */
     fun autoStart(c: Context): Boolean = p(c).getBoolean("autoStart", true)
+
+    fun setAutoStart(c: Context, on: Boolean) {
+        p(c).edit().putBoolean("autoStart", on).apply()
+    }
 
     fun save(c: Context, ip: String, port: Int, bridgePort: Int, loopbackOnly: Boolean) {
         p(c).edit()

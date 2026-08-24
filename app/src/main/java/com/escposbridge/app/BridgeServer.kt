@@ -45,7 +45,9 @@ class BridgeServer(
 ) {
     private val running = AtomicBoolean(false)
     private var serverSocket: ServerSocket? = null
-    private val pool = Executors.newCachedThreadPool()
+    // Bounded: a cached pool grows a thread per connection, which is fine on
+    // loopback and a poor default once this is reachable from the network.
+    private val pool = Executors.newFixedThreadPool(8)
 
     /**
      * One print at a time.
@@ -121,9 +123,13 @@ class BridgeServer(
             var contentType = ""
             var headerIp: String? = null
             var headerPort: Int? = null
+            var headerCount = 0
             while (true) {
                 val line = readLine(input) ?: break
                 if (line.isEmpty()) break
+                if (++headerCount > MAX_HEADERS) {
+                    respond(out, 431, "text/plain", "Too many headers\n".toByteArray()); return
+                }
                 val idx = line.indexOf(':')
                 if (idx <= 0) continue
                 val name = line.substring(0, idx).trim().lowercase()
@@ -253,7 +259,8 @@ class BridgeServer(
     private fun respond(out: BufferedOutputStream, code: Int, contentType: String?, body: ByteArray) {
         val reason = when (code) {
             200 -> "OK"; 204 -> "No Content"; 400 -> "Bad Request"
-            404 -> "Not Found"; 413 -> "Payload Too Large"; 502 -> "Bad Gateway"
+            404 -> "Not Found"; 413 -> "Payload Too Large"
+            431 -> "Request Header Fields Too Large"; 502 -> "Bad Gateway"
             else -> "OK"
         }
         val sb = StringBuilder()
@@ -312,6 +319,7 @@ class BridgeServer(
         const val MAX_BODY = 5 * 1024 * 1024
         /** Long enough to queue behind a normal receipt, short enough to fail loudly. */
         const val PRINT_QUEUE_WAIT_MS = 15_000L
+        const val MAX_HEADERS = 60
         const val CONNECT_RETRIES = 2
         const val RETRY_BACKOFF_MS = 700L
     }

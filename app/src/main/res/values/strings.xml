@@ -15,6 +15,7 @@
     <string name="no_activity">Nothing yet.</string>
 
     <string name="btn_start">Save &amp; start</string>
+    <string name="btn_restart">Save &amp; restart</string>
     <string name="btn_stop">Stop</string>
     <string name="btn_test">Test print</string>
     <string name="btn_copy_url">Copy address</string>

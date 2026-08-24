@@ -48,6 +48,8 @@ class MainActivity : Activity() {
     private lateinit var bridgeUrlView: TextView
     private lateinit var logView: TextView
     private lateinit var versionText: TextView
+    private lateinit var btnStart: Button
+    private lateinit var btnStop: Button
 
     private val ui = Handler(Looper.getMainLooper())
 
@@ -86,8 +88,10 @@ class MainActivity : Activity() {
         loopback.isChecked = Prefs.loopbackOnly(this)
         loopback.setOnCheckedChangeListener { _, _ -> bridgeUrlView.text = bridgeUrl() }
 
-        findViewById<Button>(R.id.btnStart).setOnClickListener { saveAndStart() }
-        findViewById<Button>(R.id.btnStop).setOnClickListener { stopBridge() }
+        btnStart = findViewById(R.id.btnStart)
+        btnStop = findViewById(R.id.btnStop)
+        btnStart.setOnClickListener { saveAndStart() }
+        btnStop.setOnClickListener { stopBridge() }
         findViewById<Button>(R.id.btnTest).setOnClickListener { testPrint() }
         findViewById<Button>(R.id.btnCopy).setOnClickListener { copyBridgeUrl() }
         findViewById<Button>(R.id.btnBattery).setOnClickListener { openBatterySettings() }
@@ -128,16 +132,24 @@ class MainActivity : Activity() {
         val (ip, port, bport) = readSettings()
         Prefs.save(this, ip, port, bport, loopback.isChecked)
         bridgeUrlView.text = bridgeUrl()
-        // Restart so a changed port or bind scope actually takes effect.
-        stopService(Intent(this, PrintBridgeService::class.java))
+        // No stopService() first: that is asynchronous, and the resulting
+        // onDestroy could land after the new start command and tear down the
+        // server that had just been created. The service rebuilds on every
+        // start command instead, so this alone applies changed settings.
+        Prefs.setAutoStart(this, true)
         val svc = Intent(this, PrintBridgeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc) else startService(svc)
         toast(getString(R.string.toast_started, bport))
+        ui.postDelayed({ refresh() }, 400)
     }
 
     private fun stopBridge() {
+        // Remember the choice: a reboot should not silently undo a deliberate stop.
+        Prefs.setAutoStart(this, false)
         stopService(Intent(this, PrintBridgeService::class.java))
         toast(getString(R.string.toast_stopped))
+        // Do not make the screen wait up to 1.5s to admit it stopped.
+        ui.postDelayed({ refresh() }, 300)
     }
 
     /**
@@ -246,6 +258,13 @@ class MainActivity : Activity() {
         statusCounts.visibility = if (BridgeState.okCount > 0 || BridgeState.failCount > 0) View.VISIBLE else View.GONE
         statusCounts.text = getString(R.string.counts, BridgeState.okCount, BridgeState.failCount) +
             (BridgeState.lastPrint?.let { "  ·  $it" } ?: "")
+
+        // The buttons said "Save & start" and "Stop" regardless of what was
+        // happening, so after stopping, the screen still offered Stop.
+        val running = BridgeState.status == BridgeState.Status.RUNNING
+        btnStart.text = getString(if (running) R.string.btn_restart else R.string.btn_start)
+        btnStop.isEnabled = running
+        btnStop.alpha = if (running) 1f else 0.45f
 
         batteryCard.visibility = if (isBatteryExempt()) View.GONE else View.VISIBLE
 
