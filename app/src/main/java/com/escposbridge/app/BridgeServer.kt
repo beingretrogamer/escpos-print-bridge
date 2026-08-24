@@ -27,6 +27,12 @@ import java.util.concurrent.locks.ReentrantLock
  * are few and fixed, and a till should not inherit a dependency tree it will
  * never update.
  */
+/** Lets the service keep the CPU and Wi-Fi awake for the duration of a print. */
+interface PowerGate {
+    fun acquire()
+    fun release()
+}
+
 class BridgeServer(
     private val printerIp: String,
     private val printerPort: Int,
@@ -35,6 +41,7 @@ class BridgeServer(
     private val allowedOrigin: String = "*",
     private val tcpTimeoutMs: Int = 5000,
     private val onLog: (String) -> Unit = {},
+    private val power: PowerGate? = null,
 ) {
     private val running = AtomicBoolean(false)
     private var serverSocket: ServerSocket? = null
@@ -195,20 +202,48 @@ class BridgeServer(
         if (!printLock.tryLock(PRINT_QUEUE_WAIT_MS, TimeUnit.MILLISECONDS)) {
             throw IllegalStateException("printer busy with another job")
         }
+        power?.acquire()
         try {
-            sendLocked(ip, port, bytes)
+            sendWithRetry(ip, port, bytes)
         } finally {
+            power?.release()
             printLock.unlock()
         }
     }
 
-    private fun sendLocked(ip: String, port: Int, bytes: ByteArray) {
-        Socket().use { sock ->
-            sock.connect(InetSocketAddress(ip, port), tcpTimeoutMs)
-            sock.soTimeout = tcpTimeoutMs
-            sock.getOutputStream().apply { write(bytes); flush() }
-            // Give the printer a moment to drain before the FIN.
-            try { Thread.sleep(120) } catch (_: InterruptedException) {}
+    /**
+     * Retries only a failure to *connect*.
+     *
+     * A printer that is asleep, or busy finishing the previous slip, refuses
+     * the connection for a second or two; retrying there turns a spurious 502
+     * into a print. But once the connection is open and bytes have gone out,
+     * a failure means the printer may already have some of the receipt —
+     * resending would produce a duplicate or a torn slip followed by a whole
+     * one. So a write failure is reported, never retried.
+     */
+    private fun sendWithRetry(ip: String, port: Int, bytes: ByteArray) {
+        var attempt = 0
+        while (true) {
+            val sock = Socket()
+            try {
+                sock.connect(InetSocketAddress(ip, port), tcpTimeoutMs)
+            } catch (e: Exception) {
+                try { sock.close() } catch (_: Exception) {}
+                attempt++
+                if (attempt > CONNECT_RETRIES) throw e
+                onLog("Printer did not answer (${e.message}); retry $attempt of $CONNECT_RETRIES")
+                try { Thread.sleep(RETRY_BACKOFF_MS * attempt) } catch (_: InterruptedException) {}
+                continue
+            }
+            // Connected: from here on the printer may have received bytes, so
+            // this attempt is the only one.
+            sock.use {
+                it.soTimeout = tcpTimeoutMs
+                it.getOutputStream().apply { write(bytes); flush() }
+                // Give the printer a moment to drain before the FIN.
+                try { Thread.sleep(120) } catch (_: InterruptedException) {}
+            }
+            return
         }
     }
 
@@ -274,5 +309,7 @@ class BridgeServer(
         const val MAX_BODY = 5 * 1024 * 1024
         /** Long enough to queue behind a normal receipt, short enough to fail loudly. */
         const val PRINT_QUEUE_WAIT_MS = 15_000L
+        const val CONNECT_RETRIES = 2
+        const val RETRY_BACKOFF_MS = 700L
     }
 }

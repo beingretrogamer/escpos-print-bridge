@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- printer body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,46 h48 a5,5 0 0 1 5,5 v20 a5,5 0 0 1 -5,5 h-6 v-14 h-36 v14 h-6 a5,5 0 0 1 -5,-5 v-20 a5,5 0 0 1 5,-5 z" />
+
+    <!-- paper feeding in at the top -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,32 h32 v12 h-32 z" />
+
+    <!-- receipt coming out, torn edge at the bottom -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,64 h32 v18 l-4,-3 l-4,3 l-4,-3 l-4,3 l-4,-3 l-4,3 l-4,-3 l-4,3 z" />
+
+    <!-- status lamp -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M70,55 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

@@ -4,8 +4,18 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- Android 14 makes you declare *why* you run in the foreground. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!--
+        Android 14 makes you declare *why* you run in the foreground.
+
+        specialUse rather than dataSync: this is not syncing data, it is holding
+        a local socket open for as long as the shop is open. dataSync also picks
+        up a six-hour daily cap once an app targets Android 15, which would stop
+        the bridge partway through a trading day.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- For the Wi-Fi lock held while talking to the printer. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 13+ will not display the ongoing notification without this. -->
@@ -13,7 +23,8 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@android:drawable/stat_notify_sync"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.Light">
@@ -31,7 +42,11 @@
         <service
             android:name=".PrintBridgeService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a local print server listening so a web page on this device can reach a network thermal printer for as long as the user is trading." />
+        </service>
 
         <receiver
             android:name=".BootReceiver"
