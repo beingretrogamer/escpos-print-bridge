@@ -135,14 +135,19 @@ Then add, under Settings › Secrets and variables › Actions:
 in five years.** Lose them and Play Store will never accept an update to this
 app again — the only route is a new listing under a new package name.
 
-### Still needed for the Play Store
+### Store listing
 
-- A privacy policy URL. Short: the app collects nothing, stores four settings
-  on the device, and talks only to the printer address you enter.
-- The data-safety form — "no data collected".
-- Screenshots and a feature graphic.
-- Play targets a recent API each year; raising `targetSdk` is the one change
-  likely to need code, since foreground-service rules keep tightening.
+Listing copy, category, content rating and the data-safety answers are in
+[store/listing.md](store/listing.md). The privacy policy is
+[PRIVACY.md](PRIVACY.md) — enable GitHub Pages to give it a URL Play will
+accept.
+
+What still needs a human: screenshots, a 1024×500 feature graphic, and the icon
+exported to a 512×512 PNG.
+
+Play also requires a recent `targetSdk` each year. That is the one upgrade
+likely to need code, because foreground-service rules keep tightening — the
+service is already `specialUse` rather than `dataSync` for that reason.
 
 ## Licence
 
