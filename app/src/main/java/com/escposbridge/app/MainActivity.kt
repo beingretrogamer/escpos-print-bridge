@@ -7,8 +7,11 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.widget.*
@@ -85,6 +88,11 @@ class MainActivity : Activity() {
         root.addView(Button(this).apply {
             text = getString(R.string.btn_test)
             setOnClickListener { testPrint() }
+        })
+
+        root.addView(Button(this).apply {
+            text = getString(R.string.btn_battery)
+            setOnClickListener { openBatterySettings() }
         })
 
         status = TextView(this).apply {
@@ -190,8 +198,33 @@ class MainActivity : Activity() {
         return out.toByteArray()
     }
 
+    /**
+     * Battery optimisation is the one thing that silently kills a long-running
+     * service, and an app cannot exempt itself — the user has to. Opening the
+     * settings list (rather than prompting directly) needs no extra permission
+     * and stays within Play Store policy.
+     */
+    private fun openBatterySettings() {
+        val tried = listOf(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            // Vendor ROMs sometimes lack the list screen; fall back to this app's page.
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.fromParts("package", packageName, null)),
+        )
+        for (i in tried) {
+            try { startActivity(i); return } catch (_: Exception) { /* try the next */ }
+        }
+        toast(getString(R.string.battery_no_screen))
+    }
+
+    private fun isBatteryExempt(): Boolean = try {
+        (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
+    } catch (_: Exception) { false }
+
     private fun tick() {
-        status.text = getString(R.string.status_line, Prefs.printerIp(this), Prefs.printerPort(this), Prefs.bridgePort(this))
+        val battery = if (isBatteryExempt()) getString(R.string.battery_ok) else getString(R.string.battery_warn)
+        status.text = getString(R.string.status_line, Prefs.printerIp(this), Prefs.printerPort(this), Prefs.bridgePort(this)) +
+            "\n" + battery
         logView.text = BridgeLog.text().ifEmpty { getString(R.string.no_activity) }
         ui.postDelayed({ tick() }, 1500)
     }
