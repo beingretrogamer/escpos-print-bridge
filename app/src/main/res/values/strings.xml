@@ -15,6 +15,7 @@
     <string name="btn_stop">Stop</string>
     <string name="btn_test">Test print</string>
     <string name="btn_battery">Battery settings</string>
+    <string name="btn_copy_url">Copy bridge URL</string>
 
     <string name="status_line">Printer %1$s:%2$d • listening on port %3$d</string>
     <string name="toast_started">Bridge started on port %1$d</string>
@@ -26,7 +27,11 @@
     <string name="battery_warn">Battery: restricted — Android may stop the bridge. Tap “Battery settings”.</string>
     <string name="battery_no_screen">Could not open battery settings on this device — find it under Settings › Apps.</string>
 
+    <string name="version_line">Version %1$s</string>
+    <string name="toast_copied">Copied %1$s</string>
+
     <string name="notif_title">Print bridge running</string>
+    <string name="notif_title_failed">Print bridge is NOT running</string>
     <string name="notif_starting">Starting…</string>
     <string name="channel_name">Print bridge</string>
     <string name="channel_desc">Keeps the printer connection available while the bridge runs.</string>

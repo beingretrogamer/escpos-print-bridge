@@ -49,6 +49,9 @@ class PrintBridgeService : Service() {
             )
             s.start()
             server = s
+            // The bind happens on a worker thread; give it a moment so the
+            // notification reflects the real outcome instead of "Starting…".
+            android.os.Handler(mainLooper).postDelayed({ updateNotification(BridgeState.summary()) }, 400)
         }
 
         acquireWakeLock()
@@ -95,12 +98,18 @@ class PrintBridgeService : Service() {
         )
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             Notification.Builder(this, CHANNEL_ID) else @Suppress("DEPRECATION") Notification.Builder(this)
+        val stop = PendingIntent.getService(
+            this, 1, Intent(this, PrintBridgeService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val failed = BridgeState.status == BridgeState.Status.FAILED
         return builder
-            .setContentTitle(getString(R.string.notif_title))
+            .setContentTitle(getString(if (failed) R.string.notif_title_failed else R.string.notif_title))
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(if (failed) android.R.drawable.stat_notify_error else android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .setContentIntent(open)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.btn_stop), stop)
             .build()
     }
 

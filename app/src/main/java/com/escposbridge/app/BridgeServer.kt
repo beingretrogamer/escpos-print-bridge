@@ -53,14 +53,20 @@ class BridgeServer(
                 socket.bind(if (bind != null) InetSocketAddress(bind, bridgePort)
                             else InetSocketAddress(bridgePort))
                 serverSocket = socket
-                onLog("Listening on ${if (loopbackOnly) "127.0.0.1" else "0.0.0.0"}:$bridgePort -> $printerIp:$printerPort")
+                val address = "${if (loopbackOnly) "127.0.0.1" else "0.0.0.0"}:$bridgePort"
+                BridgeState.running(address)
+                onLog("Listening on $address -> $printerIp:$printerPort")
 
                 while (running.get()) {
                     val client = try { socket.accept() } catch (e: Exception) { break }
                     pool.execute { handle(client) }
                 }
             } catch (e: Exception) {
-                onLog("Server error: ${e.message}")
+                // Almost always "address already in use". Surface it rather
+                // than leaving the UI claiming everything is fine.
+                val why = e.message ?: e.javaClass.simpleName
+                BridgeState.failed(why)
+                onLog("Could not listen on port $bridgePort: $why")
                 running.set(false)
             }
         }
@@ -68,6 +74,7 @@ class BridgeServer(
 
     fun stop() {
         running.set(false)
+        BridgeState.stopped()
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
         onLog("Stopped")

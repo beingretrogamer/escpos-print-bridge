@@ -33,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var bridgePortField: EditText
     private lateinit var loopbackSwitch: CheckBox
     private lateinit var status: TextView
+    private lateinit var detail: TextView
     private lateinit var logView: TextView
 
     private val ui = Handler(Looper.getMainLooper())
@@ -96,11 +97,23 @@ class MainActivity : Activity() {
         })
 
         status = TextView(this).apply {
-            setPadding(0, pad, 0, pad / 2)
-            textSize = 14f
+            setPadding(0, pad, 0, pad / 4)
+            textSize = 15f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
             gravity = Gravity.START
         }
         root.addView(status)
+
+        detail = TextView(this).apply {
+            textSize = 13f
+            setPadding(0, 0, 0, pad / 2)
+        }
+        root.addView(detail)
+
+        root.addView(Button(this).apply {
+            text = getString(R.string.btn_copy_url)
+            setOnClickListener { copyBridgeUrl() }
+        })
 
         root.addView(TextView(this).apply {
             text = getString(R.string.label_activity)
@@ -217,17 +230,47 @@ class MainActivity : Activity() {
         toast(getString(R.string.battery_no_screen))
     }
 
+    private fun bridgeUrl(): String =
+        if (Prefs.loopbackOnly(this)) "http://localhost:${Prefs.bridgePort(this)}"
+        else "http://<this device's IP>:${Prefs.bridgePort(this)}"
+
+    private fun copyBridgeUrl() {
+        val url = bridgeUrl()
+        try {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("bridge url", url))
+            toast(getString(R.string.toast_copied, url))
+        } catch (_: Exception) {
+            toast(url)
+        }
+    }
+
     private fun isBatteryExempt(): Boolean = try {
         (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
     } catch (_: Exception) { false }
 
     private fun tick() {
+        status.text = BridgeState.summary()
+        status.setTextColor(
+            when (BridgeState.status) {
+                BridgeState.Status.RUNNING -> Color.rgb(0, 128, 0)
+                BridgeState.Status.FAILED  -> Color.rgb(180, 0, 0)
+                BridgeState.Status.STOPPED -> Color.DKGRAY
+            }
+        )
         val battery = if (isBatteryExempt()) getString(R.string.battery_ok) else getString(R.string.battery_warn)
-        status.text = getString(R.string.status_line, Prefs.printerIp(this), Prefs.printerPort(this), Prefs.bridgePort(this)) +
-            "\n" + battery
+        detail.text = getString(R.string.status_line, Prefs.printerIp(this), Prefs.printerPort(this), Prefs.bridgePort(this)) +
+            "\n" + bridgeUrl() +
+            "\n" + battery +
+            "\n" + getString(R.string.version_line, appVersion())
         logView.text = BridgeLog.text().ifEmpty { getString(R.string.no_activity) }
         ui.postDelayed({ tick() }, 1500)
     }
+
+    /** Shown so it is obvious which build is on the device. */
+    private fun appVersion(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+    } catch (_: Exception) { "?" }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 }
